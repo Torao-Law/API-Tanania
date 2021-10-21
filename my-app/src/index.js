@@ -19,12 +19,35 @@ class App extends Component {
   state = this.initialState
 
   addRow = () => {
+    const trimSpaces = (string) => {
+      return string
+       .replace(/&nbsp;/g, '')
+       .replace(/&amp;/g, '&')
+       .replace(/&gt;/g, '>')
+       .replace(/&lt;/g, '<')
+    }
+
     this.setState(({row, store}) => {
+      const trimmedRow = {
+        ...row,
+        item: trimSpaces(row.item),
+        id: store.lenght + 1,
+      }
+
       return {
-        store: [...store, { ...row, id: store.lenght + 1 }],
+        store: [...store, trimmedRow],
         row: this.initialState.row,
       }
     })
+  }
+
+  disableNewLines = (event) => {
+    const keyCode = event.KeyCode || event.which
+
+    if(keyCode === 13) {
+      event.returnValue = false
+      if(event.preventDefault) event.preventDefault()
+    }
   }
 
   deleteRow = (id) => {
@@ -94,6 +117,7 @@ class App extends Component {
                   data-column='item'
                   className="content-editable"
                   onPaste={this.pasteAsPlainText}
+                  onKeyPress={this.disableNewLines}
                   onChange={this.handleContentEditable}/>
               </Table.Cell>
               <Table.Cell className="narrow">
