@@ -2,7 +2,7 @@ import React, { Component } from 'react';
 import ReactDOM from 'react-dom';
 import ContentEditable from 'react-contenteditable';
 import { Table, Button } from 'semantic-ui-react';
-import './index.css';
+import './styles.css';
 
 class App extends Component {
   initialState = {
@@ -17,9 +17,11 @@ class App extends Component {
     },
   }
   state = this.initialState
+  firstEditable = React.createRef()
 
   addRow = () => {
-    const trimSpaces = (string) => {
+    const { store, row } = this.state
+    const trimSpaces = string => {
       return string
        .replace(/&nbsp;/g, '')
        .replace(/&amp;/g, '&')
@@ -27,33 +29,60 @@ class App extends Component {
        .replace(/&lt;/g, '<')
     }
 
-    this.setState(({row, store}) => {
-      const trimmedRow = {
-        ...row,
-        item: trimSpaces(row.item),
-        id: store.lenght + 1,
-      }
+    const trimmedRow = {
+      ...row,
+      item: trimSpaces(row.item),
+    }
 
-      return {
+    row.id = store.lenght + 1
+
+    this.setState({
         store: [...store, trimmedRow],
         row: this.initialState.row,
-      }
-    })
-  }
+      })
 
-  disableNewLines = (event) => {
-    const keyCode = event.KeyCode || event.which
-
-    if(keyCode === 13) {
-      event.returnValue = false
-      if(event.preventDefault) event.preventDefault()
+      this.firstEditable.current.focus()
     }
+
+    deleteRow = id => {
+      const { store } = this.state
+
+      this.setState({
+        store: store.filter((item) => id !== item.id),
+      })
+    }
+
+    disableNewLines = event => {
+      const keyCode = event.KeyCode || event.which
+
+      if(keyCode === 13) {
+        event.returnValue = false
+        if(event.preventDefault) event.preventDefault()
+      }
+    }
+
+    validationNumber = (event) => {
+      const keyCode = event.keyCode || event.which
+      const string = String.fromCharCode(keyCode)
+      const regex = /[0-9,]|\./
+
+      if(!regex.test(string)) {
+        event.preventDefault = false
+        if (event.preventDefault) event.preventDefault()
+      }
+    }
+
+  pasteAsPlainText = (event) => {
+    event.preventDefault()
+
+    const text = event.clipboardData.getData('text/plain')
+    document.execCommand('insertHTML', false, text)
   }
 
-  deleteRow = (id) => {
-    this.setState(({ store }) => ({
-      store: store.filter((item) => id !== item.id),
-    }))
+  highlightAll = () => {
+    setTimeout(() => {
+      document.execCommand('selectAll', false, null)
+    }, 0)
   }
 
   handleContentEditable = (event) => {
@@ -68,12 +97,24 @@ class App extends Component {
     this.setState({ row: { ...row, [column]: value }})
   }
 
-  pasteAsPlainText = (event) => {
-    event.preventDefault()
+  handleContentEditableUpdate = event => {
+    const { store } = this.state
 
-    const text = event.clipboardData.getData('text/plain')
-    document.execCommand('insertHTML', false, text)
+    const {
+      currentTarget: {
+        dataset: { row, column },
+      },
+      target: { value },
+    } = event
+
+    let updatedRow = store.filter((item, i) => parseInt(i) === parseInt(row))[0]
+    updatedRow[column] = value
+
+    this.setState({
+      store: store.map((item, i) => (item[column] === row ? updatedRow : item)),
+    })
   }
+
 
   // methods will go here
   render() {
@@ -96,11 +137,33 @@ class App extends Component {
           </Table.Header>
 
           <Table.Body>
-            {store.map((row) =>{
+            {store.map((row, i) => {
               return (
                 <Table.Row key={row.id}>
-                  <Table.Cell>{row.item}</Table.Cell>
-                  <Table.Cell>{row.price}</Table.Cell>
+                  <Table.Cell className="narrow">
+                    <ContentEditable
+                        html={row.item}
+                        data-column="item"
+                        data-row={i}
+                        className="content-editable"
+                        onKeyPress={this.disableNewlines}
+                        onPaste={this.pasteAsPlainText}
+                        onFocus={this.highlightAll}
+                        onChange={this.handleContentEditableUpdate}
+                      />
+                  </Table.Cell>
+                  <Table.Cell className="narrow">
+                    <ContentEditable
+                      html={row.price.toString()}
+                      data-column="price"
+                      data-row={i}
+                      className="content-editable"
+                      onKeyPress={this.validateNumber}
+                      onPaste={this.pasteAsPlainText}
+                      onFocus={this.highlightAll}
+                      onChange={this.handleContentEditableUpdate}
+                    />
+                  </Table.Cell>
                   <Table.Cell className='narrow'>
                     <Button onClick={() => {this.deleteRow(row.id)}}>
                       Delete
@@ -116,8 +179,10 @@ class App extends Component {
                   html={item}
                   data-column='item'
                   className="content-editable"
-                  onPaste={this.pasteAsPlainText}
+                  innerRef={this.firstEditable}
                   onKeyPress={this.disableNewLines}
+                  onPaste={this.pasteAsPlainText}
+                  onFocus={this.highlightAll}
                   onChange={this.handleContentEditable}/>
               </Table.Cell>
               <Table.Cell className="narrow">
@@ -125,11 +190,13 @@ class App extends Component {
                   html={price}
                   data-column='price'
                   className="content-editable"
+                  onKeyPress={this.validationNumber}
                   onPaste={this.pasteAsPlainText}
+                  onFocus={this.highlightAll}
                   onChange={this.handleContentEditable}/>
               </Table.Cell>
               <Table.Cell className="narrow">
-                <Button onClick={this.addRow}>Add</Button>
+                <Button disabled={!item || !price} onClick={this.addRow}>Add</Button>
               </Table.Cell>
             </Table.Row>
           </Table.Body>
